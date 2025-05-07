@@ -1,16 +1,27 @@
+from functions import plot_MSE, plot_MAE
 from model_parameter_tester import tune_hyperparameters
+import pandas as pd
+
 
 HYPERPARAMETERS = {
-    'k_values':    [3],
-    'rnn_types':   ['SimpleRNN', 'LSTM', 'GRU'],
-    'unit_options':[20],
-    'activations': ['relu'],
-    'dropout_rates': [0.0],
-    'optimizers': ['adam', 'rmsprop', 'sgd'],
-    'learning_rates': [1e-3],
-    'batch_sizes': [16],
-    'epochs_list': [50]
+    "k_values": [1, 3, 5, 9, 10, 20],
+    "rnn_types": ["SimpleRNN", "LSTM", "GRU"],
+    "unit_options": [20],
+    "activations": ["relu"],
+    "dropout_rates": [0.0],
+    "optimizers": ["adam"],
+    "learning_rates": [1e-3],
+    "batch_sizes": [16],
+    "epochs_list": [50],
 }
 
-tune_hyperparameters('Xtrain.mat', **HYPERPARAMETERS)
+# results_data = tune_hyperparameters("Xtrain.mat", **HYPERPARAMETERS)
 
+# Save the results to a CSV file
+# results_data.to_csv("results_k1tm20.csv", index=False)
+
+# read the results from the CSV file
+results_data = pd.read_csv("results_k1tm20.csv")
+
+plot_MSE(results_data)
+plot_MAE(results_data)

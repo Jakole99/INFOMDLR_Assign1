@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
-from keras.models import Sequential
-from keras.layers import SimpleRNN, Dense
+import seaborn as sns
 
 
 def preprocess_data(scaled_data, k):
@@ -18,69 +16,8 @@ def preprocess_data(scaled_data, k):
     return x, y
 
 
-def train(scaled_data, k, split_data: bool = False):
-    # Prepare sequences
-    x, y = preprocess_data(scaled_data, k)
-
-    if split_data:
-        # Do a 80/20 split for training and testing
-        split_index = int(len(x) * 0.8)
-        x_train, x_test = x[:split_index], x[split_index:]
-        y_train, y_test = y[:split_index], y[split_index:]
-    else:
-        x_train, y_train = x, y
-        x_test, y_test = x, y
-
-    # Build the RNN model
-    model = Sequential([SimpleRNN(50, activation="relu", input_shape=(k, 1)), Dense(1)])
-
-    # Compile the model with Mean Squared Error loss and Adam optimizer
-    model.compile(optimizer="adam", loss="mse")
-
-    # Train the model for 200 epochs on the training data
-    history = model.fit(x_train, y_train, epochs=200, verbose=0)
-
-    # Plot training loss over epochs for visual evaluation
-    plt.figure(figsize=(10, 5))
-    plt.plot(history.history["loss"], label="Training Loss")
-    plt.title(f"Model Loss Over Epochs (k={k}, Optimizer=adam)")
-    plt.xlabel("Epoch")
-    plt.ylabel("Mean Squared Error")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    return x_test, y_test, model
-
-
-def predict(x_test, y_test, model, scaler):
-    # Predict
-    predicted_scaled = model.predict(x_test)
-
-    # Inverse transform predictions and targets back to original scale for evaluation
-    y_predicted = scaler.inverse_transform(predicted_scaled)
-    y_true = scaler.inverse_transform(y_test)
-
-    mse_per_prediction = [
-        mean_squared_error(y_true[i : i + 1], y_predicted[i : i + 1])
-        for i in range(len(y_true))
-    ]
-
-    # Plot MSE for each prediction on the original scale
-    plt.figure(figsize=(10, 5))
-    plt.plot(mse_per_prediction, label="MSE per Prediction on Original Scale")
-    plt.title("Mean Squared Error per Prediction (on Original Scale)")
-    plt.xlabel("Sample Index")
-    plt.ylabel("Mean Squared Error")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    return y_true, y_predicted
-
-
 # Create a plot to visually assess the model's performance
-def plot_data(y_true, y_pred, n_parts: int):
+def plot_actual_vs_predictions(y_true, y_pred, n_parts: int):
     size = len(y_true)
     step = size // n_parts
 
@@ -96,3 +33,56 @@ def plot_data(y_true, y_pred, n_parts: int):
         plt.xlabel("Time Step")
         plt.ylabel("Laser Measurement")
         plt.show()
+
+
+def plot_MSE(data):
+    plt.figure(figsize=(8, 5))
+    sns.lineplot(
+        data=data,
+        x="k",
+        y="avg_val_mse",
+        hue="rnn_type",
+        style="rnn_type",
+        markers=True,
+        dashes=True,
+        palette="tab10",
+    )
+    plt.title("Validation MSE for Different k and RNN Types")
+    plt.xlabel("Window Size (k)")
+    plt.ylabel("Mean Squared Error (MSE)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_MAE(data):
+    plt.figure(figsize=(8, 5))
+    sns.lineplot(
+        data=data,
+        x="k",
+        y="avg_val_mae",
+        hue="rnn_type",
+        style="rnn_type",
+        markers=True,
+        dashes=False,  # solid lines
+        palette="tab10",
+    )
+    plt.title("Validation MAE for Different k and RNN Types")
+    plt.xlabel("Window Size (k)")
+    plt.ylabel("Mean Absolute Error (MAE)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_validation_and_training_loss(history, k, rnn_type):
+    plt.figure(figsize=(8, 5))
+    plt.plot(history.history["loss"], label="Training Loss")
+    plt.plot(history.history["val_loss"], label="Validation Loss")
+    plt.title(f"Loss Curve (k={k}, RNN={rnn_type})")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss (MSE)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
