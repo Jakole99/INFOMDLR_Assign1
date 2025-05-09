@@ -15,7 +15,7 @@ HYPERPARAMETERS = {
     "epochs_list": [50],
 }
 
-# results_data = tune_hyperparameters("Xtrain.mat", **HYPERPARAMETERS)
+results_data = tune_hyperparameters("Xtrain.mat", **HYPERPARAMETERS)
 
 # Save the results to a CSV file
 # results_data.to_csv("results_k1tm20.csv", index=False)

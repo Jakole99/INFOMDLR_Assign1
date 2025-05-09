@@ -74,20 +74,27 @@ def tune_hyperparameters(
         # prepare data
         x, y = preprocess_data(scaled, k)
 
-        # Not scaling again, but giving its own scaler to the y values
-        scaler_y = MinMaxScaler()
-        y = scaler_y.fit_transform(y)
-
         n_folds = 5
-        min_train_size = int(len(x) * 0.4)
-        val_window = int((len(x) - min_train_size) / n_folds)
+        train_window = int(len(x) * 0.4)  # Fixed-size training window 40%
+        val_window = int((len(x) - train_window) / n_folds)
 
         mse_folds = []
         mae_folds = []
+        histories = []
 
         for fold in range(n_folds):
-            train_end = min_train_size + fold * val_window
+            train_start = fold * val_window
+            train_end = train_start + train_window
             val_end = train_end + val_window
+
+            if val_end > len(x):
+                break
+
+            x_train, y_train = x[train_start:train_end], y[train_start:train_end]
+            print("train_start: ", train_start)
+            print("train_end: ", train_end)
+            x_val, y_val = x[train_end:val_end], y[train_end:val_end]
+            print("val_end: ", val_end)
 
             x_train, y_train = x[:train_end], y[:train_end]
             x_val, y_val = x[train_end:val_end], y[train_end:val_end]
@@ -109,12 +116,13 @@ def tune_hyperparameters(
                 verbose=0,
             )
 
-            plot_validation_and_training_loss(history, k, rnn_type)
+            histories.append(history.history)
+            print(histories)
 
             # correct inverse transform using the y scaler
             y_val_pred_scaled = model.predict(x_val)
-            y_val_true = scaler_y.inverse_transform(y_val)
-            y_val_pred = scaler_y.inverse_transform(y_val_pred_scaled)
+            y_val_true = scaler.inverse_transform(y_val)
+            y_val_pred = scaler.inverse_transform(y_val_pred_scaled)
 
             mse = mean_squared_error(y_val_true, y_val_pred)
             mae = mean_absolute_error(y_val_true, y_val_pred)
@@ -125,6 +133,24 @@ def tune_hyperparameters(
             mse_folds.append(mse)
             mae_folds.append(mae)
 
+            plot_validation_and_training_loss(history.history, k, rnn_type)
+
+        # Get list of lists for each metric
+        all_train_losses = [h["loss"] for h in histories]
+        all_val_losses = [h["val_loss"] for h in histories]
+
+        # Convert to numpy arrays to compute mean
+        avg_train_loss = np.mean(all_train_losses, axis=0)
+        avg_val_loss = np.mean(all_val_losses, axis=0)
+
+        # Combine into one averaged history dictionary
+        average_history = {
+            "loss": avg_train_loss.tolist(),
+            "val_loss": avg_val_loss.tolist(),
+        }
+        print(average_history)
+
+        # plot_validation_and_training_loss(average_history, k, rnn_type)
         avg_mse = np.mean(mse_folds)
         avg_mae = np.mean(mae_folds)
 
@@ -145,7 +171,7 @@ def tune_hyperparameters(
         )
 
     results_data = pd.DataFrame(results)
-    results_data = results_data.sort_values(by="avg_val_mse").reset_index(drop=True)
+    results_data = results_data.sort_values(by="avg_val_mae").reset_index(drop=True)
     results_data.to_csv("hyperparam_tuning_results.csv", index=False)
 
     print("best parameter combinations:")
@@ -169,17 +195,11 @@ def train_model(
     raw = loadmat(data_path)["Xtrain"]
     scaler = MinMaxScaler()
     scaled = scaler.fit_transform(raw)
-    results = []
 
     # prepare data
     x, y = preprocess_data(scaled, k)
 
-    # Not scaling again, but giving its own scaler to the y values
-    scaler_y = MinMaxScaler()
-    y = scaler_y.fit_transform(y)
-
-    x_train, y_train = x[: int(len(x) * 0.8)], y[: int(len(y) * 0.8)]
-    x_test, y_test = x[int(len(x) * 0.8) :], y[int(len(y) * 0.8) :]
+    x_train, y_train = x, y
 
     # build model
     model = build_model(rnn_type, units, activation, dropout_rate, (k, 1))
@@ -194,43 +214,11 @@ def train_model(
     history = model.fit(
         x_train,
         y_train,
-        validation_data=(x_test, y_test),
         epochs=epochs,
         batch_size=batch_size,
         verbose=0,
     )
 
-    mse = mean_squared_error(
-        scaler_y.inverse_transform(y_test),
-        scaler_y.inverse_transform(model.predict(x_test)),
-    )
-    print("MSE: ", mse)
-    mae = mean_absolute_error(
-        scaler_y.inverse_transform(y_test),
-        scaler_y.inverse_transform(model.predict(x_test)),
-    )
-    print("MAE: ", mae)
+    # plot_validation_and_training_loss(history, k, rnn_type)
 
-    # show results
-    results.append(
-        {
-            "k": k,
-            "rnn_type": rnn_type,
-            "units": units,
-            "activation": activation,
-            "dropout": dropout_rate,
-            "optimizer": optimizer_name,
-            "learning_rate": learning_rate,
-            "batch_size": batch_size,
-            "epochs": epochs,
-            "val_mse": mse,
-            "val_mae": mae,
-        }
-    )
-
-    plot_validation_and_training_loss(history, k, rnn_type)
-
-    results_data = pd.DataFrame(results)
-    results_data = results_data.sort_values(by="val_mse").reset_index(drop=True)
-
-    return results_data, model
+    return model, history

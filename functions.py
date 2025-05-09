@@ -35,6 +35,16 @@ def plot_actual_vs_predictions(y_true, y_pred, n_parts: int):
         plt.show()
 
 
+def plot_predictions(y_pred, k):
+    plt.figure(figsize=(10, 5))
+    plt.plot(y_pred, label="Predicted", alpha=0.7, linestyle="-")
+    plt.legend()
+    plt.title(f"Model Predictions for k={k}")
+    plt.xlabel("Time Step")
+    plt.ylabel("Laser Measurement")
+    plt.show()
+
+
 def plot_MSE(data):
     plt.figure(figsize=(8, 5))
     sns.lineplot(
@@ -64,7 +74,7 @@ def plot_MAE(data):
         hue="rnn_type",
         style="rnn_type",
         markers=True,
-        dashes=False,  # solid lines
+        dashes=False,
         palette="tab10",
     )
     plt.title("Validation MAE for Different k and RNN Types")
@@ -77,8 +87,8 @@ def plot_MAE(data):
 
 def plot_validation_and_training_loss(history, k, rnn_type):
     plt.figure(figsize=(8, 5))
-    plt.plot(history.history["loss"], label="Training Loss")
-    plt.plot(history.history["val_loss"], label="Validation Loss")
+    plt.plot(history["loss"], label="Training Loss")
+    plt.plot(history["val_loss"], label="Validation Loss")
     plt.title(f"Loss Curve (k={k}, RNN={rnn_type})")
     plt.xlabel("Epoch")
     plt.ylabel("Loss (MSE)")

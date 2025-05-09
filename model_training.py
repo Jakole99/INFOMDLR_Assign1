@@ -3,7 +3,7 @@ from model_parameter_tester import train_model
 
 ### Final model
 HYPERPARAMETERS = {
-    "k": 3,
+    "k": 10,
     "rnn_type": "SimpleRNN",
     "units": 20,
     "activation": "relu",
@@ -14,7 +14,7 @@ HYPERPARAMETERS = {
     "epochs": 50,
 }
 
-result, model = train_model("Xtrain.mat", **HYPERPARAMETERS)
+model, history = train_model("Xtrain.mat", **HYPERPARAMETERS)
 
 # Save the model
-# model.save("model_k3.h5")
+model.save("model_k10.h5")
