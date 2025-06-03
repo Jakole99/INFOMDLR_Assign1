@@ -4,15 +4,22 @@ from model_building import build_model
 import h5py
 import numpy as np
 import tensorflow as tf
+from itertools import product
+import pandas as pd
 
 
 # --------------------------------- CONFIGURATION ---------------------------------
 
-SETUP = "intra"         # "intra" or "cross"
-DOWNSAMPLE = 4          # ≥ 1
-NORMALISE = "z"         # "z", "minmax", or None
-BATCH_SIZE = 8
-EPOCHS = 15
+# set up testing type as "intra" or "cross"
+SETUP = "cross"                      
+
+# hyperparameters to tune:
+DOWNSAMPLE_LIST = [1, 4]                   # ≥ 1
+NORMALISE_LIST = ["z", "minmax"]           # "z" or "minmax" or None
+BATCH_SIZE_LIST = [4, 16]           
+EPOCHS_LIST = [10]            
+
+# non-tunable hyperparameters 
 VAL_SPLIT = 0.2
 SEED = 42
 BASE_DIR = Path(__file__).resolve().parent
@@ -126,30 +133,68 @@ def make_dataset(files, shuffle=False):
 #                              RUN TRAINING
 # ---------------------------------------------------------------------------
 
-# 1. set random seed
-tf.random.set_seed(SEED)
-np.random.seed(SEED)
-random.seed(SEED)
+results = []
 
-# 2. get all the raw data 
-train_files, test_files = get_files()
+for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS in product(
+    DOWNSAMPLE_LIST, NORMALISE_LIST, BATCH_SIZE_LIST, EPOCHS_LIST
+):
+    print("==========================================================")
+    print(f"Running experiment with:")
+    print(f"  DOWNSAMPLE = {DOWNSAMPLE}")
+    print(f"  NORMALISE  = {NORMALISE!r}")
+    print(f"  BATCH_SIZE = {BATCH_SIZE}")
+    print(f"  EPOCHS     = {EPOCHS}")
+    print("==========================================================\n")
 
-# 3. shuffle the raw data and split into validation and train parts
-val_split = int(VAL_SPLIT * len(train_files))
-random.shuffle(train_files)
-val_files = train_files[:val_split]
-train_files = train_files[val_split:]
+    try:
+        # 1. set random seed
+        tf.random.set_seed(SEED)
+        np.random.seed(SEED)
+        random.seed(SEED)
 
-# 4. make datasets with the filepaths obtained above 
-train_dataset = make_dataset(train_files, shuffle=True)
-val_dataset = make_dataset(val_files)
-test_dataset = make_dataset(test_files)
+        # 2. get all the raw data 
+        train_files, test_files = get_files()
 
-# 5. build the model using Keras
-model = build_model()
-model.fit(train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2)
+        # 3. shuffle the raw data and split into validation and train parts
+        val_split_idx = int(VAL_SPLIT * len(train_files))
+        random.shuffle(train_files)
+        val_files = train_files[:val_split_idx]
+        train_files_subset = train_files[val_split_idx:]
 
-# 6. evaluate the model
-print("\nEvaluating…")
-_, test_acc = model.evaluate(test_dataset, verbose=0)
-print(f"Test accuracy: {test_acc:.3f}")
+        # 4. make datasets with the filepaths obtained above 
+        train_dataset = make_dataset(train_files_subset, shuffle=True)
+        val_dataset = make_dataset(val_files)
+        test_dataset = make_dataset(test_files)
+
+        # 5. build the model using Keras
+        model = build_model()
+        model.fit(train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2)
+
+        # 6. evaluate the model
+        print("\nEvaluating…")
+        _, test_acc = model.evaluate(test_dataset, verbose=0)
+        print(f"Test accuracy: {test_acc:.3f}\n")
+
+        # 7. record results
+        results.append({
+            "downsample": DOWNSAMPLE,
+            "normalise": NORMALISE,
+            "batch_size": BATCH_SIZE,
+            "epochs": EPOCHS,
+            "test_acc": float(test_acc),
+        })
+
+    except Exception as e:
+        print(f"!! COMBINATION FAILED !!  due to error: {e}\n")
+        continue
+
+
+
+# after all combinations, save results to the CSV and print the top 5
+df = pd.DataFrame(results)
+df = df.sort_values(by="test_acc", ascending=False).reset_index(drop=True)
+df.to_csv("hyperparameter_combination_results.csv", index=False)
+
+print("o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o-o")
+print("Top 5 combinations:")
+print(df.head(5))
