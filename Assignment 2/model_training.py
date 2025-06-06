@@ -1,26 +1,29 @@
 import random
 from pathlib import Path
-from model_building import build_model
+from model_building import Simple2DConvNet, MEGNet
 import h5py
 import numpy as np
 import tensorflow as tf
 from itertools import product
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 # --------------------------------- CONFIGURATION ---------------------------------
 
 # set up testing type as "intra" or "cross"
-SETUP = "cross"                      
+SETUP = "intra"
 
 # hyperparameters to tune:
-DOWNSAMPLE_LIST = [1, 4]                   # ≥ 1
-NORMALISE_LIST = ["z", "minmax"]           # "z" or "minmax" or None
-BATCH_SIZE_LIST = [4, 16]           
-EPOCHS_LIST = [10]            
+DOWNSAMPLE_LIST = [8]  # ≥ 1
+NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
+BATCH_SIZE_LIST = [4]
+EPOCHS_LIST = [20]
 
-# non-tunable hyperparameters 
+# non-tunable hyperparameters
 VAL_SPLIT = 0.2
+CHANNELS = 248  # number of MEG sensors
+TIMEPOINTS = 35624  # known fixed length of all MEG recordings
 SEED = 42
 BASE_DIR = Path(__file__).resolve().parent
 DATA_ROOT = BASE_DIR / ("Intra" if SETUP == "intra" else "Cross")
@@ -34,11 +37,8 @@ TASK_LABELS = {
 }
 
 
-
-
-
-
 # --------------------------------- FILE OBTAINING ---------------------------------
+
 
 def get_files():
     # get 'Intra' files
@@ -55,15 +55,14 @@ def get_files():
 
     # raise error if there are no files found in the folder
     if not train or not test:
-        raise SystemExit(f"!! No .h5 files found in {DATA_ROOT} !!. Make sure 'Cross' & 'Intra' folders are in the 'Assignment 2' folder")
+        raise SystemExit(
+            f"!! No .h5 files found in {DATA_ROOT} !!. Make sure 'Cross' & 'Intra' folders are in the 'Assignment 2' folder"
+        )
     return train, test
 
 
-
-
-
-
 # --------------------------------- FILE PARSING ---------------------------------
+
 
 # Get the label associated with the file
 def infer_label(fp: Path):
@@ -73,15 +72,20 @@ def infer_label(fp: Path):
             return label
     raise ValueError(f"Unknown label for {fp.name}")
 
-# Read one dataset from a given .h5 file && apply downsampling + normalisation 
+
+# Read one dataset from a given .h5 file && apply downsampling + normalisation
 def read_h5(fp: Path):
     with h5py.File(fp, "r") as f:
         keys = list(f.keys())
         if len(keys) != 1:
-            raise ValueError(f"!!Expected exactly 1 dataset in {fp.name}, found: {keys}")
+            raise ValueError(
+                f"!!Expected exactly 1 dataset in {fp.name}, found: {keys}"
+            )
         x = f[keys[0]][()]
     if DOWNSAMPLE > 1:
         x = x[:, ::DOWNSAMPLE]
+    TARGET_SAMPLES = TIMEPOINTS // DOWNSAMPLE
+    x = x[:, :TARGET_SAMPLES]  # crop to exact length
     if NORMALISE == "z":
         mean = x.mean(axis=0, keepdims=True)
         std = x.std(axis=0, keepdims=True) + 1e-7
@@ -92,41 +96,31 @@ def read_h5(fp: Path):
     return x.astype("float32")
 
 
-
-
-
-
 # --------------------------------- MAKE DATASETS ---------------------------------
 
-def make_dataset(files, shuffle=False):
 
+def make_dataset(files, shuffle=False):
     # make a list of labels for the given data  (rest= 0,  task_story_math= 1,  task_working_memory= 2,  task_motor= 3)
     labels = [infer_label(f) for f in files]
 
-    # generator that streams (data, label) pairs
     def gen():
         for f, y in zip(files, labels):
-            x = read_h5(f) # returns an array of shape (channels, timepoints)
-            yield x.T, y
+            x = read_h5(f)  # x shape: (248, SAMPLES)
+            yield tf.expand_dims(x, axis=-1), y  # shape: (248, SAMPLES, 1)
 
     ds = tf.data.Dataset.from_generator(
         gen,
         output_signature=(
-            tf.TensorSpec(shape=(None, 248), dtype=tf.float32),
+            tf.TensorSpec(
+                shape=(CHANNELS, TIMEPOINTS // DOWNSAMPLE, 1), dtype=tf.float32
+            ),
             tf.TensorSpec(shape=(), dtype=tf.int32),
         ),
     )
 
     if shuffle:
         ds = ds.shuffle(len(files), reshuffle_each_iteration=True)
-    return ds.padded_batch(BATCH_SIZE)
-
-
-
-
-
-
-
+    return ds.batch(BATCH_SIZE)
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +133,7 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS in product(
     DOWNSAMPLE_LIST, NORMALISE_LIST, BATCH_SIZE_LIST, EPOCHS_LIST
 ):
     print("==========================================================")
-    print(f"Running experiment with:")
+    print("Running experiment with:")
     print(f"  DOWNSAMPLE = {DOWNSAMPLE}")
     print(f"  NORMALISE  = {NORMALISE!r}")
     print(f"  BATCH_SIZE = {BATCH_SIZE}")
@@ -152,7 +146,7 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS in product(
         np.random.seed(SEED)
         random.seed(SEED)
 
-        # 2. get all the raw data 
+        # 2. get all the raw data
         train_files, test_files = get_files()
 
         # 3. shuffle the raw data and split into validation and train parts
@@ -161,33 +155,50 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS in product(
         val_files = train_files[:val_split_idx]
         train_files_subset = train_files[val_split_idx:]
 
-        # 4. make datasets with the filepaths obtained above 
+        # 4. make datasets with the filepaths obtained above
         train_dataset = make_dataset(train_files_subset, shuffle=True)
         val_dataset = make_dataset(val_files)
         test_dataset = make_dataset(test_files)
 
         # 5. build the model using Keras
-        model = build_model()
-        model.fit(train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2)
+        model = MEGNet(Samples=TIMEPOINTS // DOWNSAMPLE)
+        # model = Simple2DConvNet(Samples=TIMEPOINTS // DOWNSAMPLE)
+        history = model.fit(
+            train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2
+        )
 
-        # 6. evaluate the model
+        # 6. Plot Training History, validation Loss, and Accuracy
+        plt.plot(history.history["loss"], label="train loss")
+        plt.plot(history.history["val_loss"], label="val loss")
+        plt.legend()
+        plt.title("Loss over Epochs")
+        plt.show()
+
+        plt.plot(history.history["accuracy"], label="train acc")
+        plt.plot(history.history["val_accuracy"], label="val acc")
+        plt.legend()
+        plt.title("Accuracy over Epochs")
+        plt.show()
+
+        # 7. evaluate the model
         print("\nEvaluating…")
         _, test_acc = model.evaluate(test_dataset, verbose=0)
         print(f"Test accuracy: {test_acc:.3f}\n")
 
-        # 7. record results
-        results.append({
-            "downsample": DOWNSAMPLE,
-            "normalise": NORMALISE,
-            "batch_size": BATCH_SIZE,
-            "epochs": EPOCHS,
-            "test_acc": float(test_acc),
-        })
+        # 8. record results
+        results.append(
+            {
+                "downsample": DOWNSAMPLE,
+                "normalise": NORMALISE,
+                "batch_size": BATCH_SIZE,
+                "epochs": EPOCHS,
+                "test_acc": float(test_acc),
+            }
+        )
 
     except Exception as e:
         print(f"!! COMBINATION FAILED !!  due to error: {e}\n")
         continue
-
 
 
 # after all combinations, save results to the CSV and print the top 5
