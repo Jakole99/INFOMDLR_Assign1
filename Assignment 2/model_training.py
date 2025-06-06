@@ -13,8 +13,8 @@ import json
 # --------------------------------- CONFIGURATION ---------------------------------
 
 # set up testing type as "intra" or "cross"
-SETUP = "cross"
-MODEL = "MEGNet"  # "MEGNet" or "Simple2DConvNet"
+SETUP = "intra"
+MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 
 # hyperparameters to tune:
 DOWNSAMPLE_LIST = [16]  # ≥ 1
@@ -293,6 +293,8 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
 
         # 8. record and save results
         config = {
+            "test_acc": float(test_acc),
+            "setup": SETUP,
             "model_name": MODEL,
             "downsample": DOWNSAMPLE,
             "normalise": NORMALISE,
@@ -300,8 +302,6 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
             "epochs": EPOCHS,
             "window_size": WINDOW_SIZE,
             "stride": STRIDE,
-            "test_acc": float(test_acc),
-            "setup": SETUP,
         }
         # fill all null with "None"
         config = {k: (v if v is not None else "None") for k, v in config.items()}
