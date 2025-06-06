@@ -14,14 +14,15 @@ import json
 
 # set up testing type as "intra" or "cross"
 SETUP = "cross"
+MODEL = "MEGNet"  # "MEGNet" or "Simple2DConvNet"
 
 # hyperparameters to tune:
-DOWNSAMPLE_LIST = [4]  # ≥ 1
+DOWNSAMPLE_LIST = [16]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
 BATCH_SIZE_LIST = [8]
 EPOCHS_LIST = [15]
-WINDOW_LIST = [500]
-STRIDE_LIST = [250]
+WINDOW_LIST = [None]
+STRIDE_LIST = [None]
 
 # non-tunable hyperparameters
 VAL_SPLIT = 0.2
@@ -212,6 +213,7 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
     print("==========================================================")
     print("Running experiment with:")
     print(f"  SETUP       = {SETUP}")
+    print(f"  MODEL       = {MODEL}")
     print(f"  DOWNSAMPLE  = {DOWNSAMPLE}")
     print(f"  NORMALISE   = {NORMALISE!r}")
     print(f"  BATCH_SIZE  = {BATCH_SIZE}")
@@ -255,7 +257,10 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
             samples = TIMEPOINTS // DOWNSAMPLE
 
         # 5. build the model using Keras
-        model = MEGNet(Samples=samples)
+        if MODEL == "MEGNet":
+            model = MEGNet(Samples=samples)
+        else:
+            model = Simple2DConvNet(Samples=samples)
         # model = Simple2DConvNet(Samples=TIMEPOINTS // DOWNSAMPLE)
         history = model.fit(
             train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2
@@ -288,6 +293,7 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
 
         # 8. record and save results
         config = {
+            "model_name": MODEL,
             "downsample": DOWNSAMPLE,
             "normalise": NORMALISE,
             "batch_size": BATCH_SIZE,
@@ -297,8 +303,8 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
             "test_acc": float(test_acc),
             "setup": SETUP,
         }
-        # fill all null with None
-        config = {k: (v if v is not None else None) for k, v in config.items()}
+        # fill all null with "None"
+        config = {k: (v if v is not None else "None") for k, v in config.items()}
         with open(combo_dir / "config.json", "w") as f:
             json.dump(config, f, indent=2)
             model.save(str(combo_dir / "model"))
