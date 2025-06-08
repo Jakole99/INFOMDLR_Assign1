@@ -16,13 +16,16 @@ import json
 SETUP = "intra"
 MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 
-# hyperparameters to tune:
-DOWNSAMPLE_LIST = [16]  # ≥ 1
+DOWNSAMPLE_LIST = [8]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
-BATCH_SIZE_LIST = [8]
-EPOCHS_LIST = [15]
-WINDOW_LIST = [None]
-STRIDE_LIST = [None]
+BATCH_SIZE_LIST = [16, 32]
+EPOCHS_LIST = [40]
+EARLY_STOPPING = [10]
+WINDOW_LIST = [None, 500]
+STRIDE_LIST = [250]
+DROP_OUT_LIST = [0.25, 0.5]
+LEARNING_RATE_LIST = [1e-4, 1e-3]
+
 
 # non-tunable hyperparameters
 VAL_SPLIT = 0.2
@@ -62,6 +65,7 @@ def get_files():
         raise SystemExit(
             f"!! No .h5 files found in {DATA_ROOT} !!. Make sure 'Cross' & 'Intra' folders are in the 'Assignment 2' folder"
         )
+
     return train, test
 
 
@@ -202,13 +206,24 @@ RUN_DIR.mkdir(parents=True, exist_ok=True)
 
 results = []
 
-for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
+for (
+    DOWNSAMPLE,
+    NORMALISE,
+    BATCH_SIZE,
+    EPOCHS,
+    WINDOW_SIZE,
+    STRIDE,
+    DROP_OUT,
+    LEARNING_RATE,
+) in product(
     DOWNSAMPLE_LIST,
     NORMALISE_LIST,
     BATCH_SIZE_LIST,
     EPOCHS_LIST,
     WINDOW_LIST,
     STRIDE_LIST,
+    DROP_OUT_LIST,
+    LEARNING_RATE_LIST,
 ):
     print("==========================================================")
     print("Running experiment with:")
@@ -220,6 +235,8 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
     print(f"  EPOCHS      = {EPOCHS}")
     print(f"  WINDOW_SIZE = {WINDOW_SIZE}")
     print(f"  STRIDE      = {STRIDE}")
+    print(f"  DROP_OUT    = {DROP_OUT}")
+    print(f"  LEARNING_RATE = {LEARNING_RATE}")
     print("==========================================================\n")
 
     # Create a unique directory for this combination of hyperparameters
@@ -258,9 +275,13 @@ for DOWNSAMPLE, NORMALISE, BATCH_SIZE, EPOCHS, WINDOW_SIZE, STRIDE in product(
 
         # 5. build the model using Keras
         if MODEL == "MEGNet":
-            model = MEGNet(Samples=samples)
+            model = MEGNet(
+                Samples=samples, dropoutRate=DROP_OUT, learning_rate=LEARNING_RATE
+            )
         else:
-            model = Simple2DConvNet(Samples=samples)
+            model = Simple2DConvNet(
+                Samples=samples, dropout_rate=DROP_OUT, learning_rate=LEARNING_RATE
+            )
         # model = Simple2DConvNet(Samples=TIMEPOINTS // DOWNSAMPLE)
         history = model.fit(
             train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2

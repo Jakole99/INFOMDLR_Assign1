@@ -23,14 +23,16 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.constraints import max_norm
 
 
-def Simple2DConvNet(nb_classes=4, Chans=248, Samples=None, dropout_rate=0.5):
+def Simple2DConvNet(
+    nb_classes=4,
+    Chans=248,
+    Samples=None,
+    dropout_rate=0.5,
+    learning_rate=0.001,
+):
     input_layer = Input(shape=(Chans, Samples, 1))
 
-    x = Conv2D(16, (3, 11), padding="same", activation="relu")(input_layer)
-    x = BatchNormalization()(x)
-    x = MaxPooling2D((1, 4))(x)
-
-    x = Conv2D(32, (3, 11), padding="same", activation="relu")(x)
+    x = Conv2D(16, (1, 64), padding="same", activation="relu")(input_layer)
     x = BatchNormalization()(x)
     x = MaxPooling2D((1, 4))(x)
 
@@ -41,7 +43,9 @@ def Simple2DConvNet(nb_classes=4, Chans=248, Samples=None, dropout_rate=0.5):
 
     model = Model(inputs=input_layer, outputs=output)
     model.compile(
-        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
     )
 
     return model
@@ -59,6 +63,7 @@ def MEGNet(
     Samples=None,
     dropoutRate=0.5,
     kernLength=64,
+    learning_rate=0.001,
     F1=8,
     D=2,
     F2=16,
@@ -111,7 +116,7 @@ def MEGNet(
     softmax = Activation("softmax", name="softmax")(dense)
     model = Model(inputs=input1, outputs=softmax)
     model.compile(
-        optimizer="adam",
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"],
     )
