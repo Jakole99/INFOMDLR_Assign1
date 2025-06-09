@@ -1,6 +1,7 @@
 import random
 from pathlib import Path
 from model_building import Simple2DConvNet, MEGNet
+import math
 import h5py
 import numpy as np
 import tensorflow as tf
@@ -18,13 +19,13 @@ MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 
 DOWNSAMPLE_LIST = [8]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
-BATCH_SIZE_LIST = [16, 32]
+BATCH_SIZE_LIST = [16]
 EPOCHS_LIST = [20]
 EARLY_STOPPING = [10]
-WINDOW_LIST = [None, 500]
+WINDOW_LIST = [None]
 STRIDE_LIST = [250]
-DROP_OUT_LIST = [0.25, 0.5]
-LEARNING_RATE_LIST = [1e-4, 1e-3]
+DROP_OUT_LIST = [0.25]
+LEARNING_RATE_LIST = [1e-4]
 
 
 # non-tunable hyperparameters
@@ -33,6 +34,7 @@ CHANNELS = 248  # number of MEG sensors
 TIMEPOINTS = 35624  # known fixed length of all MEG recordings
 SEED = 42
 BASE_DIR = Path(__file__).resolve().parent
+# BASE_DIR = BASE_DIR = Path("./data/Final Project data") Google Cola
 DATA_ROOT = BASE_DIR / ("Intra" if SETUP == "intra" else "Cross")
 
 
@@ -125,7 +127,7 @@ def create_windows(data, window_size, stride):
 # --------------------------------- MAKE DATASETS ---------------------------------
 
 
-def make_dataset(files, shuffle=False, window_size=None, stride=None):
+def make_dataset(files, shuffle=False, window_size=None, stride=None, repeat=False):
     # make a list of labels for the given data  (rest= 0,  task_story_math= 1,  task_working_memory= 2,  task_motor= 3)
     labels = [infer_label(f) for f in files]
 
@@ -162,7 +164,19 @@ def make_dataset(files, shuffle=False, window_size=None, stride=None):
             )
         else:
             ds = ds.shuffle(len(files), reshuffle_each_iteration=True)
+
+    if repeat:
+        ds = ds.repeat()
+
     return ds.batch(BATCH_SIZE)
+
+
+def count_samples(files, window_size=None, stride=None):
+    if window_size:
+        windows_per_file = (TIMEPOINTS // DOWNSAMPLE - window_size) // stride + 1
+        return len(files) * windows_per_file
+    else:
+        return len(files)
 
 
 # --------------------------------- AGGREGATE RESULTS ---------------------------------
@@ -261,7 +275,11 @@ for (
 
         # 4. make datasets with the filepaths obtained above
         train_dataset = make_dataset(
-            train_files_subset, shuffle=True, window_size=WINDOW_SIZE, stride=STRIDE
+            train_files_subset,
+            shuffle=True,
+            window_size=WINDOW_SIZE,
+            stride=STRIDE,
+            repeat=True,
         )
         val_dataset = make_dataset(val_files, window_size=WINDOW_SIZE, stride=STRIDE)
         test_dataset = make_dataset(test_files, window_size=WINDOW_SIZE, stride=STRIDE)
@@ -282,9 +300,35 @@ for (
             model = Simple2DConvNet(
                 Samples=samples, dropout_rate=DROP_OUT, learning_rate=LEARNING_RATE
             )
-        # model = Simple2DConvNet(Samples=TIMEPOINTS // DOWNSAMPLE)
+
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy",
+            patience=EARLY_STOPPING[0],  # or a looped value if you're tuning this
+            min_delta=0.001,
+            restore_best_weights=True,
+        )
+
+        NUM_VAL_BATCHES = math.ceil(
+            count_samples(val_files, WINDOW_SIZE, STRIDE) / BATCH_SIZE
+        )
+        NUM_TEST_BATCHES = math.ceil(
+            count_samples(test_files, WINDOW_SIZE, STRIDE) / BATCH_SIZE
+        )
+        NUM_TRAIN_BATCHES = math.ceil(
+            count_samples(train_files_subset, WINDOW_SIZE, STRIDE) / BATCH_SIZE
+        )
+        print(NUM_TEST_BATCHES)
+        print(NUM_VAL_BATCHES)
+        print(NUM_TRAIN_BATCHES)
+
         history = model.fit(
-            train_dataset, validation_data=val_dataset, epochs=EPOCHS, verbose=2
+            train_dataset,
+            validation_data=val_dataset,
+            validation_steps=NUM_VAL_BATCHES,
+            epochs=EPOCHS,
+            callbacks=[early_stopping],
+            steps_per_epoch=NUM_TRAIN_BATCHES,
+            verbose=1,
         )
 
         # 6. Plot Training History, validation Loss, and Accuracy
@@ -309,7 +353,9 @@ for (
                 model, test_files, window_size=WINDOW_SIZE, stride=STRIDE
             )
         else:
-            test_acc = model.evaluate(test_dataset, verbose=0)[1]
+            test_acc = model.evaluate(test_dataset, steps=NUM_TEST_BATCHES, verbose=0)[
+                1
+            ]
         print(f"Test accuracy: {test_acc:.3f}\n")
 
         # 8. record and save results
@@ -323,14 +369,13 @@ for (
             "epochs": EPOCHS,
             "window_size": WINDOW_SIZE,
             "stride": STRIDE,
-            "dropout_rate":  DROP_OUT,
-            "learning_rate": LEARNING_RATE
+            "dropout_rate": DROP_OUT,
+            "learning_rate": LEARNING_RATE,
         }
         # fill all null with "None"
         config = {k: (v if v is not None else "None") for k, v in config.items()}
         with open(combo_dir / "config.json", "w") as f:
             json.dump(config, f, indent=2)
-            model.save(str(combo_dir / "model"))
 
         results.append(config)
 
