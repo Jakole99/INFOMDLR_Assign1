@@ -17,15 +17,15 @@ import json
 SETUP = "intra"
 MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 
-DOWNSAMPLE_LIST = [8]  # ≥ 1
+DOWNSAMPLE_LIST = [4, 8, 16]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
-BATCH_SIZE_LIST = [16, 32]
+BATCH_SIZE_LIST = [8]
 EPOCHS_LIST = [20]
 EARLY_STOPPING = [10]
-WINDOW_LIST = [None, 500]
-STRIDE_LIST = [250]
-DROP_OUT_LIST = [0.25, 0.5]
-LEARNING_RATE_LIST = [1e-4, 1e-3]
+WINDOW_LIST = [None, 250, 500]
+STRIDE_FRAC_LIST = [0.25, 0.5]
+DROP_OUT_LIST = [0.1, 0.25, 0.5]
+LEARNING_RATE_LIST = [1e-5, 1e-4, 1e-3]
 
 
 # non-tunable hyperparameters
@@ -226,7 +226,7 @@ for (
     BATCH_SIZE,
     EPOCHS,
     WINDOW_SIZE,
-    STRIDE,
+    STRIDE_FRAC,
     DROP_OUT,
     LEARNING_RATE,
 ) in product(
@@ -235,28 +235,33 @@ for (
     BATCH_SIZE_LIST,
     EPOCHS_LIST,
     WINDOW_LIST,
-    STRIDE_LIST,
+    STRIDE_FRAC_LIST,
     DROP_OUT_LIST,
     LEARNING_RATE_LIST,
 ):
     print("==========================================================")
     print("Running experiment with:")
-    print(f"  SETUP       = {SETUP}")
-    print(f"  MODEL       = {MODEL}")
-    print(f"  DOWNSAMPLE  = {DOWNSAMPLE}")
-    print(f"  NORMALISE   = {NORMALISE!r}")
-    print(f"  BATCH_SIZE  = {BATCH_SIZE}")
-    print(f"  EPOCHS      = {EPOCHS}")
-    print(f"  WINDOW_SIZE = {WINDOW_SIZE}")
-    print(f"  STRIDE      = {STRIDE}")
-    print(f"  DROP_OUT    = {DROP_OUT}")
-    print(f"  LEARNING_RATE = {LEARNING_RATE}")
+    print(f"  SETUP             = {SETUP}")
+    print(f"  MODEL             = {MODEL}")
+    print(f"  DOWNSAMPLE        = {DOWNSAMPLE}")
+    print(f"  NORMALISE         = {NORMALISE!r}")
+    print(f"  BATCH_SIZE        = {BATCH_SIZE}")
+    print(f"  EPOCHS            = {EPOCHS}")
+    print(f"  WINDOW_SIZE       = {WINDOW_SIZE}")
+    print(f"  STRIDE_FRAC       = {STRIDE_FRAC}")
+    print(f"  DROP_OUT          = {DROP_OUT}")
+    print(f"  LEARNING_RATE     = {LEARNING_RATE}")
     print("==========================================================\n")
 
     # Create a unique directory for this combination of hyperparameters
     combo_id = f"combo_{len(results):03d}"
     combo_dir = RUN_DIR / combo_id
     combo_dir.mkdir(parents=True, exist_ok=True)
+
+    if WINDOW_SIZE is not None:
+        STRIDE = int(WINDOW_SIZE * STRIDE_FRAC)
+    else:
+        STRIDE = None
 
     try:
         # 1. set random seed
