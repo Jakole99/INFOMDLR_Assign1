@@ -383,9 +383,19 @@ for (
             json.dump(config, f, indent=2)
 
         results.append(config)
+        # Append the current result to a partial CSV after each success
+        pd.DataFrame([config]).to_csv(
+            RUN_DIR / "summary_partial.csv",
+            mode="a",
+            header=not (RUN_DIR / "summary_partial.csv").exists(),
+            index=False,
+        )
 
     except Exception as e:
-        print(f"!! COMBINATION FAILED !!  due to error: {e}\n")
+        error_path = combo_dir / "error.txt"
+        with open(error_path, "w") as f:
+            f.write(f"Error: {str(e)}\n")
+        print(f"!! COMBINATION FAILED !! due to error: {e}\nLogged to {error_path}")
         continue
 
 
