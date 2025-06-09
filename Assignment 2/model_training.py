@@ -27,7 +27,6 @@ STRIDE_FRAC_LIST = [0.25, 0.5]
 DROP_OUT_LIST = [0.1, 0.25, 0.5]
 LEARNING_RATE_LIST = [1e-5, 1e-4, 1e-3]
 
-
 # non-tunable hyperparameters
 VAL_SPLIT = 0.2
 CHANNELS = 248  # number of MEG sensors
@@ -365,6 +364,7 @@ for (
 
         # 8. record and save results
         config = {
+            "combo_id": combo_id,
             "test_acc": float(test_acc),
             "setup": SETUP,
             "model_name": MODEL,
@@ -373,10 +373,12 @@ for (
             "batch_size": BATCH_SIZE,
             "epochs": EPOCHS,
             "window_size": WINDOW_SIZE,
+            "stride_frac": STRIDE_FRAC,
             "stride": STRIDE,
             "dropout_rate": DROP_OUT,
             "learning_rate": LEARNING_RATE,
         }
+
         # fill all null with "None"
         config = {k: (v if v is not None else "None") for k, v in config.items()}
         with open(combo_dir / "config.json", "w") as f:
