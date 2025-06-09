@@ -19,7 +19,7 @@ MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 DOWNSAMPLE_LIST = [8]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
 BATCH_SIZE_LIST = [16, 32]
-EPOCHS_LIST = [40]
+EPOCHS_LIST = [20]
 EARLY_STOPPING = [10]
 WINDOW_LIST = [None, 500]
 STRIDE_LIST = [250]
@@ -323,6 +323,8 @@ for (
             "epochs": EPOCHS,
             "window_size": WINDOW_SIZE,
             "stride": STRIDE,
+            "dropout_rate":  DROP_OUT,
+            "learning_rate": LEARNING_RATE
         }
         # fill all null with "None"
         config = {k: (v if v is not None else "None") for k, v in config.items()}
