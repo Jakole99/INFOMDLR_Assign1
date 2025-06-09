@@ -19,13 +19,13 @@ MODEL = "Simple2DConvNet"  # "MEGNet" or "Simple2DConvNet"
 
 DOWNSAMPLE_LIST = [8]  # ≥ 1
 NORMALISE_LIST = ["z"]  # "z" or "minmax" or None
-BATCH_SIZE_LIST = [16]
+BATCH_SIZE_LIST = [16, 32]
 EPOCHS_LIST = [20]
 EARLY_STOPPING = [10]
-WINDOW_LIST = [None]
+WINDOW_LIST = [None, 500]
 STRIDE_LIST = [250]
-DROP_OUT_LIST = [0.25]
-LEARNING_RATE_LIST = [1e-4]
+DROP_OUT_LIST = [0.25, 0.5]
+LEARNING_RATE_LIST = [1e-4, 1e-3]
 
 
 # non-tunable hyperparameters
